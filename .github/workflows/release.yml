@@ -8,6 +8,13 @@ on:
     tags:
       - 'argus-ai-v*'
 
+env:
+  CARGO_TERM_COLOR: always
+  # Strip debug symbols and enable LTO for smaller release binaries (~8MB vs ~35MB unstripped)
+  CARGO_PROFILE_RELEASE_STRIP: symbols
+  CARGO_PROFILE_RELEASE_LTO: true
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+
 jobs:
   build:
     strategy:
@@ -34,6 +41,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
       - name: Install cross-compilation tools (aarch64-linux)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -47,16 +59,19 @@ jobs:
       - name: Package (unix)
         if: matrix.os != 'windows-latest'
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../argus-${{ matrix.target }}.tar.gz argus
-          cd ../../..
+          BINARY=target/${{ matrix.target }}/release/argus
+          if [ ! -f "$BINARY" ]; then
+            echo "Binary not found at $BINARY" && exit 1
+          fi
+          tar czf argus-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release argus
 
       - name: Package (windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../argus-${{ matrix.target }}.zip argus.exe
-          cd ../../..
+          if (-not (Test-Path "target/${{ matrix.target }}/release/argus.exe")) {
+            Write-Error "Binary not found"; exit 1
+          }
+          7z a argus-${{ matrix.target }}.zip target/${{ matrix.target }}/release/argus.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
