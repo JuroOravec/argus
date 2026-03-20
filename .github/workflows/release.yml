@@ -10,7 +10,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Strip debug symbols and enable LTO for smaller release binaries (~8MB vs ~35MB unstripped)
+  # Strip symbols + LTO reduce size (Linux binaries are ~28 MB stripped vs ~35 MB unstripped; varies by target).
   CARGO_PROFILE_RELEASE_STRIP: symbols
   CARGO_PROFILE_RELEASE_LTO: true
   CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
