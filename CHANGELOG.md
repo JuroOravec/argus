@@ -2,6 +2,14 @@
 
 All notable changes to Argus are documented here.
 
+## [0.5.3](https://github.com/JuroOravec/argus/compare/argus-ai-v0.5.2...argus-ai-v0.5.3) - 2026-03-20
+
+### Fixed
+
+- *(npm)* download binaries from argus-ai-v* release tags
+- *(ci)* strip binaries, add rust cache, harden packaging
+- *(ci)* trigger release binary build on argus-ai-v* tags
+
 ## [0.5.2](https://github.com/Meru143/argus/compare/argus-ai-v0.5.1...argus-ai-v0.5.2) - 2026-02-26
 
 ### Other
