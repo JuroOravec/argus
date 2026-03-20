@@ -6,6 +6,8 @@ const os = require("os");
 
 const VERSION = require("./package.json").version;
 const REPO = "Meru143/argus";
+/** release-plz tags the workspace root crate as `argus-ai-v${semver}` (must match .github/workflows/release.yml). */
+const RELEASE_TAG = `argus-ai-v${VERSION}`;
 
 const PLATFORM_MAP = {
   "darwin-x64": "argus-x86_64-apple-darwin.tar.gz",
@@ -20,7 +22,7 @@ function getPlatformKey() {
 }
 
 function getDownloadUrl(asset) {
-  return `https://github.com/${REPO}/releases/download/v${VERSION}/${asset}`;
+  return `https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${asset}`;
 }
 
 function download(url) {
