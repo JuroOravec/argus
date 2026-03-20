@@ -1,5 +1,3 @@
-# Fork: open/update the release PR only (version bumps + changelog).
-# Does not publish to crates.io or npm — binaries come from release.yml; npm stays manual if needed.
 name: Release
 
 permissions:
@@ -13,8 +11,13 @@ on:
 
 jobs:
   release-plz:
-    name: Release-plz (release PR only)
+    name: Release-plz
     runs-on: ubuntu-latest
+    env:
+      # Repository variable (Settings → Secrets and variables → Actions → Variables).
+      # Unset on upstream Meru143/argus → default publish path (crates.io + conditional npm).
+      # Set to 'false' on forks to skip registry publishing; only the release PR job runs.
+      ARGUS_PUBLISH_TO_REGISTRIES: ${{ vars.ARGUS_PUBLISH_TO_REGISTRIES }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,10 +27,55 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Create / update release PR
+      - name: Run release-plz
         uses: release-plz/action@v0.5
+        id: release-plz
+        if: env.ARGUS_PUBLISH_TO_REGISTRIES != 'false'
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # When publishing is disabled, only open/update the release PR (no crates.io / npm).
+      - name: Create Release PR (publish disabled)
+        uses: release-plz/action@v0.5
+        if: env.ARGUS_PUBLISH_TO_REGISTRIES == 'false'
         with:
           command: release-pr
         env:
-          # GH_PAT triggers CI on the opened PR; GITHUB_TOKEN works but may not fire workflows on the bot PR.
+          # Use GH_PAT if set to trigger CI workflows, otherwise fallback to GITHUB_TOKEN
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # Create PR for next release if changes exist
+      - name: Create Release PR
+        uses: release-plz/action@v0.5
+        if: env.ARGUS_PUBLISH_TO_REGISTRIES != 'false' && (steps.release-plz.outputs.releases == '[]' || steps.release-plz.outputs.releases == '')
+        with:
+          command: release-pr
+        env:
+          # Use GH_PAT if set to trigger CI workflows, otherwise fallback to GITHUB_TOKEN
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # Custom step: Sync version to NPM and Publish
+      # Only runs if release-plz successfully released the main binary crate
+      - name: Publish to NPM
+        if: env.ARGUS_PUBLISH_TO_REGISTRIES != 'false' && contains(steps.release-plz.outputs.releases, 'argus-ai')
+        run: |
+          echo "Release detected for argus-ai! Syncing to NPM..."
+          
+          # 1. Get version from Cargo.toml (it was just updated by release-plz)
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d '"' -f 2)
+          echo "New version: $VERSION"
+          
+          # 2. Setup Node
+          npm config set //registry.npmjs.org/:_authToken ${{ secrets.NPM_TOKEN }}
+          
+          # 3. Update package.json
+          cd npm
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          
+          # 4. Publish
+          npm publish --access public
