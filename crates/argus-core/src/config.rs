@@ -130,6 +130,11 @@ pub struct LlmConfig {
     /// API key for the provider.
     pub api_key: Option<String>,
     /// Custom base URL for API requests.
+    ///
+    /// Note on the API root format:
+    /// - OpenAI-compatible and Anthropic: the URL should contain a `/v1` segment, e.g. `https://api.openai.com/v1`.
+    /// - Gemini: the URL should contain `/v1beta`, e.g. `https://generativelanguage.googleapis.com/v1beta`.
+    /// - This was not the case in Argus **0.5.2 and earlier**, so the client appends the version segment when missing.
     pub base_url: Option<String>,
     /// Maximum input tokens to send per request.
     pub max_input_tokens: Option<usize>,

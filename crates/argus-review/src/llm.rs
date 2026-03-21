@@ -56,9 +56,14 @@ enum Provider {
 
 /// Multi-provider LLM chat client.
 ///
-/// Supports OpenAI-compatible (`/v1/chat/completions`), Anthropic
-/// (`/v1/messages`), Gemini (`generateContent`), and Ollama (`/api/chat`) endpoints.
+/// Supports OpenAI-compatible (`/chat/completions`), Anthropic (`/messages`),
+/// Gemini (`/models/...:generateContent`), and Ollama (`/api/chat`) endpoints.
+///
 /// The provider is determined by `LlmConfig.provider`.
+///
+/// Note on the API root format:
+/// - The standard OpenAI-compatible base URL should contain version segment, e.g. `https://api.openai.com/v1`
+/// - This was not the case in Argus **0.5.2 and earlier**, so the client appends the version segment when missing.
 ///
 /// # Examples
 ///
@@ -81,6 +86,40 @@ pub struct LlmClient {
 }
 
 const MAX_ERROR_REASON_CHARS: usize = 320;
+
+/// API root for OpenAI-compatible and Anthropic calls.
+///
+/// - Strip trailing `/`.
+/// - If the URL ends with `/v1`, keep it (standard base URL).
+/// - If not, append `/v1` (deprecated compatibility path).
+///
+/// Deprecated: User-provided `base_url` should have a `/v1` suffix, e.g. `https://api.openai.com/v1`.
+///             Make the change in the next major release.
+fn openai_compatible_api_root(base_url: &str) -> String {
+    let b = base_url.trim_end_matches('/');
+    if b.ends_with("/v1") {
+        b.to_string()
+    } else {
+        format!("{b}/v1")
+    }
+}
+
+/// API root for Gemini calls.
+///
+/// - Strip trailing `/`.
+/// - If the URL ends with `/v1beta`, keep it.
+/// - If not, append `/v1beta` (deprecated compatibility path).
+///
+/// Deprecated: User-provided `base_url` should have a `/v1beta` suffix, e.g. `https://generativelanguage.googleapis.com/v1beta`.
+///             Make the change in the next major release.
+fn gemini_api_root(base_url: &str) -> String {
+    let b = base_url.trim_end_matches('/');
+    if b.ends_with("/v1beta") {
+        b.to_string()
+    } else {
+        format!("{b}/v1beta")
+    }
+}
 
 impl std::fmt::Debug for LlmClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -195,8 +234,8 @@ impl LlmClient {
             )
         })?;
 
-        let base_url = self.base_url.as_deref().unwrap_or("https://api.openai.com");
-        let url = format!("{base_url}/v1/chat/completions");
+        let root = openai_compatible_api_root(self.base_url.as_deref().unwrap_or("https://api.openai.com"));
+        let url = format!("{root}/chat/completions");
 
         let body = serde_json::json!({
             "model": self.model,
@@ -261,11 +300,12 @@ impl LlmClient {
             )
         })?;
 
-        let base_url = self
-            .base_url
-            .as_deref()
-            .unwrap_or("https://api.anthropic.com");
-        let url = format!("{base_url}/v1/messages");
+        let root = openai_compatible_api_root(
+            self.base_url
+                .as_deref()
+                .unwrap_or("https://api.anthropic.com"),
+        );
+        let url = format!("{root}/messages");
 
         // Extract system message(s) and non-system messages
         let mut system_parts: Vec<String> = Vec::new();
@@ -368,15 +408,13 @@ impl LlmClient {
             )
         })?;
 
-        let base_url = self
-            .base_url
-            .as_deref()
-            .unwrap_or("https://generativelanguage.googleapis.com");
-
-        let url = format!(
-            "{base_url}/v1beta/models/{}:generateContent?key={api_key}",
-            self.model,
+        let root = gemini_api_root(
+            self.base_url
+                .as_deref()
+                .unwrap_or("https://generativelanguage.googleapis.com"),
         );
+
+        let url = format!("{root}/models/{}:generateContent?key={api_key}", self.model,);
 
         // Redact the API key from error messages to prevent leaking it via
         // URLs embedded in reqwest errors.
@@ -706,6 +744,46 @@ mod tests {
         assert!(err.contains("Unknown LLM provider"));
         assert!(err.contains("cohere"));
         assert!(err.contains("openai, anthropic, gemini"));
+    }
+
+    #[test]
+    fn openai_api_root_host_only_appends_v1() {
+        assert_eq!(
+            super::openai_compatible_api_root("https://api.openai.com"),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            super::openai_compatible_api_root("https://api.openai.com/"),
+            "https://api.openai.com/v1"
+        );
+    }
+
+    #[test]
+    fn openai_api_root_sdk_style_no_double_v1() {
+        assert_eq!(
+            super::openai_compatible_api_root("https://openrouter.ai/api/v1"),
+            "https://openrouter.ai/api/v1"
+        );
+        assert_eq!(
+            super::openai_compatible_api_root("https://openrouter.ai/api/v1/"),
+            "https://openrouter.ai/api/v1"
+        );
+    }
+
+    #[test]
+    fn gemini_api_root_default_style() {
+        assert_eq!(
+            super::gemini_api_root("https://generativelanguage.googleapis.com"),
+            "https://generativelanguage.googleapis.com/v1beta"
+        );
+    }
+
+    #[test]
+    fn gemini_api_root_with_v1beta_no_duplicate() {
+        assert_eq!(
+            super::gemini_api_root("https://example.com/custom/v1beta"),
+            "https://example.com/custom/v1beta"
+        );
     }
 
     #[test]

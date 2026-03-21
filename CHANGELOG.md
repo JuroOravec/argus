@@ -2,6 +2,22 @@
 
 All notable changes to Argus are documented here.
 
+## Unreleased
+
+### Fixed
+
+- **LLM `base_url` vs API version path (OpenAI-compatible, Anthropic, Gemini)**  
+  
+   Argus used to always append `/v1/...` or `/v1beta/...` after whatever you put in `[llm] base_url`. This breaks the **OpenAI-style** base URL, which already includes the version segment—e.g. `https://api.openai.com/v1` or gateways like `https://openrouter.ai/api/v1`. 
+  
+   In those cases Argus was calling `.../v1/v1/chat/completions` (or the Gemini equivalent), which often returns **404** with an HTML error page instead of JSON.
+
+   The client now checks whether `base_url` already ends with `/v1` (OpenAI-compatible + Anthropic) or `/v1beta` (Gemini). If it does, that value is used as the API root; if not, Argus still appends the segment, preserving behavior from **0.5.2 and earlier**.
+
+### Deprecated
+
+- **`base_url` without a version suffix** (e.g. `https://api.openai.com`) still work but are **deprecated**. Instead use proper base URLs like `https://api.openai.com/v1` or `https://openrouter.ai/api/v1`. Support for host-only values may be removed in a future major release.
+
 ## [0.5.3](https://github.com/JuroOravec/argus/compare/argus-ai-v0.5.2...argus-ai-v0.5.3) - 2026-03-20
 
 ### Fixed
