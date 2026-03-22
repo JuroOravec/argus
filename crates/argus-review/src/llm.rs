@@ -234,7 +234,9 @@ impl LlmClient {
             )
         })?;
 
-        let root = openai_compatible_api_root(self.base_url.as_deref().unwrap_or("https://api.openai.com"));
+        let root = openai_compatible_api_root(
+            self.base_url.as_deref().unwrap_or("https://api.openai.com"),
+        );
         let url = format!("{root}/chat/completions");
 
         let body = serde_json::json!({
